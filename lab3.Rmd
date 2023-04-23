@@ -1,0 +1,303 @@
+---
+title: 'Lab 3: Topic Analysis'
+author: "Javier Patrón"
+date: "April 23rd 2023"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Assignment Lab 3:
+
+#### Due in 2 weeks: May 2 at 11:59PM
+
+In this lab, we will analyze articles related to the topics of blue carbon and mangroves from the Universities of California using text sentiment and analysis techniques.
+We will create models to select the best"topics" composed of words and analyze the distribution of topic proportions across the documents to understand the key themes in the environmental articles.
+The LDA (Latent Dirichlet Allocation) model will be used to understand the words used in the environmental articles and how they relate to the identified topics.
+
+For this assignment you'll the articles data you downloaded from Nexis Uni in Week 2.
+
+```{r setup, include=FALSE}
+library(quanteda)
+library(tm)
+library(topicmodels)
+library(ldatuning)
+library(tidyverse)
+library(tidytext)
+library(reshape2)
+library(RColorBrewer)
+
+```
+
+### 1. Create a corpus from your articles.
+
+```{r, include =F}
+# Get the 131 articles that I previously downloaded from the UCSB Library Portal using the Nexis Uni Tool
+# my_files <- list.files(pattern = ".docx", 
+#                        path = "/Users/javipatron/Documents/MEDS/Courses/eds231/text_modeling-lab2/lab2_files",
+#                        full.names = TRUE, 
+#                        recursive = TRUE, 
+#                        ignore.case = TRUE)
+# 
+# 
+# text_dat <- lnt_read(my_files)
+# 
+# # The @ is for indexing within tibbles
+# articles_df <- text_dat@articles
+# 
+# 
+# text_table <- tibble(id = text_dat@articles$ID, 
+#               text = text_dat@articles$Article)
+# 
+# write_csv(text_table, here::here("text_table.csv"))
+```
+
+```{r}
+text_table <- read_csv(here::here("text_table.csv"))
+corpus <- corpus(x = text_table, text_field = "text")
+stories_stats <- summary(corpus)
+head(corpus)
+```
+
+### 2. Clean the data as appropriate.
+
+Clean the data with stop_words
+
+```{r}
+tokens <- tokens(corpus, remove_punct = T, remove_numbers = T)
+add_stops <- c(stopwords("en"))
+tokens_selected <- tokens_select(tokens, pattern = add_stops, selection = "remove")
+```
+
+### 3. Run three models (i.e. with 3 values of k) and select the overall best value for k.
+
+Include some justification for your selection: theory, FindTopicsNumber() optimization metrics, interpretability, LDAvis.
+Select the best single value of k.
+Create optimization metrics (Understand the topics), and create 3 values of key.
+
+### Steps:
+
+#### a) Create a document-feature matrix (DFM) from tokenized text data.
+
+Each row will represent a document, and each column will represent a word or term.
+The values in the matrix ill represent the frequency of each feature in each document.
+
+#### b) Trim the matrix to remove infrequently occurring terms.
+
+This matrix will be trimmed containing words or terms that ocurr more than `min_docfreq=x` amount
+
+#### c) The resulting matrix is then subset to include only documents that contain at least that X term.
+
+#### d) Set the number of topics (k).
+
+One way to determine this is to identify the main themes or ideas in the text data and set k equal to the number of themes.
+
+#### e) Apply the Latent Dirichlet Allocation (LDA).
+
+This function `LDA()` creates an algorithm to the document-feature matrix (DFM) to extract the specified number of topics (k).
+The "Gibbs" method is used to estimate the model.
+The control argument specifies the number of iterations to run the algorithm for.
+The verbose argument is set to 25 to print out the status of the model estimation every 25 iterations.
+
+```{r}
+# a) Create the document-feature matrix with the texts
+matrix <- dfm(tokens_selected, tolower = T) 
+
+# b) Trim the DFM to remove infrequently occurring terms
+matrix_trimmed <- dfm_trim(matrix, min_docfreq = 30)
+
+# c) Subset the DFM to keep only documents with at least one term
+sel_idx <- slam::row_sums(matrix_trimmed) > 0 
+matrix_trimmed <- matrix_trimmed[sel_idx,]
+
+
+```
+
+Find the top three K based in the graph below
+
+```{r}
+set.seed(123)
+# d) Set the number of topics
+topic_number <- FindTopicsNumber(matrix_trimmed, 
+                           topics = seq(from = 2,
+                                        to = 20, 
+                                        by = 1), 
+                           metrics = c("CaoJuan2009", "Deveaud2014"),
+                           method = "Gibbs",
+                           verbose = T )
+
+FindTopicsNumber_plot(topic_number)
+```
+
+As we can see in the graph above the top K values that we will be analyzing are 4, 6, 8.
+
+```{r}
+set.seed(123)
+# Seeing the graph 8 topics seems like the correct K number 
+k4 <- 4
+k6 <- 6
+k8 <- 8
+
+# e) Apply the Latent Dirichlet Allocation algorithm to the trimmed document-feature matrix. The resulting model will have k topics, specified by the variable k.
+
+topicModel_k4 <- LDA(matrix_trimmed, k4, 
+                     method = "Gibbs", # The "Gibbs" method is used to estimate the model
+                     control = list(iter = 500), # The control argument specifies the number of iterations to run the algorithm for
+                     verbose = 25) # The verbose argument prints out the status of the model estimation every 25 iterations
+
+topicModel_k6 <- LDA(matrix_trimmed, k6, 
+                     method = "Gibbs", # The "Gibbs" method is used to estimate the model
+                     control = list(iter = 500), # The control argument specifies the number of iterations to run the algorithm for
+                     verbose = 25) # The verbose argument prints out the status of the model estimation every 25 iterations
+
+
+topicModel_k8 <- LDA(matrix_trimmed, k8, 
+                     method = "Gibbs", # The "Gibbs" method is used to estimate the model
+                     control = list(iter = 500), # The control argument specifies the number of iterations to run the algorithm for
+                     verbose = 25) # The verbose argument prints out the status of the model estimation every 25 iterations
+
+```
+
+## 4. Plot the top terms in each topic and the distribution of topics across a sample of the documents (constrained by what looks good in the plot).
+
+### Steps:
+
+#### a) Examine at our results.
+
+#### b) Tidy the results
+
+#### c) Extract the top words related to the topics
+
+#### d) Visualize the results in a plot
+
+```{r}
+#Calculating the posterior distribution of the topic model 
+tmResult4 <- posterior(topicModel_k4)
+tmResult6 <- posterior(topicModel_k6)
+tmResult8 <- posterior(topicModel_k8)
+
+# Prints the top 5 terms for each of the topics in the topicModel_k5 model.
+terms(topicModel_k4, 4)
+terms(topicModel_k6, 6)
+terms(topicModel_k8, 8)
+
+# Extracting the matrix of document-topic probabilities from tmResult.
+# Theta shows how likely that document is to be associated with each of the topics in the model. The theta matrix can be used to identify the most relevant topics for a particular document.
+theta4 <- tmResult4$topics
+theta6 <- tmResult6$topics
+theta8 <- tmResult8$topics
+
+# Extracting the matrix of topic-term probabilities from tmResult.
+# Beta shows how likely each word in the vocabulary is to be associated with that topic. Is the relationship between the words in the vocabulary and the topics in the model.
+beta4 <- tmResult4$terms
+beta6 <- tmResult6$terms
+beta8 <- tmResult8$terms
+
+```
+
+```{r }
+# b) Creating a "tidy" data frame from the topic-term matrix (also known as the "beta" matrix) 
+main_topics <- tidy(topicModel_k5, matrix = "beta")
+
+# c) Extracting the top 10 terms for each of the five topics in a topic model and arranging them in a tidy data frame.
+top_blue_carbon_terms <- main_five_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# d) Visualize the most significant terms for each topic in a blue carbon analysis
+top_blue_carbon_terms %>%
+  mutate(term = reorder_within(term, beta, topic, sep = "")) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free_y") +
+  scale_x_reordered()+
+  coord_flip()
+
+```
+
+The highest beta values can be interpreted as the most salient words for a given topic, as they are the words that are most strongly associated with that topic in the corpus.
+Conversely, the lowest beta values can be interpreted as words that are not very relevant to the topic, as they are not strongly associated with it.
+
+## 5. Take a stab at interpreting the resulting topics. What are the key themes discussed in the articles in your data base? Use the words, use what you know about the articles, and do an interpretation of what they mean.
+
+### Steps:
+
+#### a) Assign the names to the topics
+
+#### b) Wrangle the data to plot
+
+#### c) Plot the data and use the
+
+To help us identify the topics we're working with, we can assign names to them.
+
+```{r }
+# a)
+topic_words <- terms(topicModel_k5, 5)
+topic_names <- apply(topic_words, 2, paste, collapse = " ")
+```
+
+We can explore the theta matrix, which contains the distribution of each topic over each document.
+
+```{r}
+# b) Reshape the data in a format that can be visualized using ggplot
+
+# Create a vector of example document IDs from 1 to 5, and get the length of the vector
+example_ids <- c(1:5)
+
+# Extract the topic proportions from the theta matrix for the example documents
+n <- length(example_ids)
+
+# Assign the topic names as column names to the example_props matrix
+example_props <- theta[example_ids,]
+
+# Reassign the names to the matrix
+colnames(example_props) <- topic_names
+
+
+# Use the melt function to convert the matrix to a long format, and create additional columns. 
+viz_df <- melt(cbind(data.frame(example_props),
+                     document = factor(1:n),
+                     variable.name = "topic",
+                     id.vars = "document"))
+```
+
+```{r}
+# c) Create a bar chart with ggplot, using the reshaped data
+my_palette <- brewer.pal(5, "Paired")
+
+ggplot(data = viz_df, aes(x = variable, 
+                          y = value, 
+                          fill = document)) +
+  geom_bar(stat="identity", width = 0.7) +
+  scale_fill_manual(values = my_palette) +
+  labs(x = "Topic", 
+       y = "Proportion", 
+       title = "Proportions of the Top Topics",
+       subtitle = "Distributions and Word Proportions",
+       caption = "Source: library.ucsb ") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    coord_flip() +
+  facet_wrap(~ document, ncol = n)
+```
+
+d)  Here's a neat JSON-based model visualizer. `{LDAviz}` is a helpful tool that uses JSON to visualize the distribution of words on topics and the distance between topics. The circles on the LDAvis plot are sized proportionally to the number of words that belong to each topic, and the distance between the circles represents how much they share words.
+
+```{r LDAvis}
+library(LDAvis) #visualization 
+library("tsne") #matrix decomposition
+svd_tsne <- function(x) tsne(svd(x)$u)
+json <- createJSON(
+  phi = tmResult$terms, 
+  theta = tmResult$topics, 
+  doc.length = rowSums(matrix_trimmed), 
+  vocab = colnames(matrix_trimmed), 
+  term.frequency = colSums(matrix_trimmed),
+  mds.method = svd_tsne,
+  plot.opts = list(xlab="", ylab="")
+)
+serVis(json)
+```

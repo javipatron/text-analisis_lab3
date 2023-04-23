@@ -1,5 +1,6 @@
 ---
 title: 'Lab 3: Topic Analysis'
+author: "Javier Patrón"
 output:
   word_document: default
   pdf_document: default
@@ -19,9 +20,10 @@ library(reshape2)
 Load the data
 
 ```{r data}
-tbl <-read_csv("/Users/javipatron/Documents/MEDS/Courses/eds231/text_modeling-lab2/spring_text")
 
+#tbl <-read_csv("/Users/javipatron/Documents/MEDS/Courses/eds231/text_modeling-lab2/spring_text")
 tbl <-read_csv("https://raw.githubusercontent.com/MaRo406/EDS-231-text-sentiment/main/data/sb_dat_text.csv")
+
 ```
 
 First we'll build the corpus using corpus() from {quanteda}.
@@ -47,6 +49,8 @@ toks1 <- tokens_select(toks, pattern = add_stops, selection = "remove")
 Now we can transform our data to prepare for topic modeling. Let's create a document-feature matrix with quanteda::dfm(). Topic modeling doesn't work with empty rows in this matrix, so we'll need to remove those. I do that here using {slam}, which is designed to deal with sparse matrices like ours.
 
 ```{r dfm}
+
+
 # Create the matrix with the texts
 dfm_sb <- dfm(toks1, tolower = T)
 dfm <- dfm_trim(dfm_sb, min_docfreq = 2)
@@ -60,10 +64,9 @@ Great, now we are almost ready to run a model. We just have to come up with an i
 ```{r LDA_modeling}
 
 # Set the number of topics you want
-
 k <- 3
 
-topicModel_k3 <- LDA(dfm,k, method = "Gibbs", 
+topicModel_k3 <- LDA(dfm, k, method = "Gibbs", 
                      control = list(iter = 500),
                      verbose = 25)
 
@@ -83,7 +86,6 @@ theta <- result$topics
 
 dim(beta)
 dim(theta)
-
 
 
 terms(topicModel_k3, 10)
@@ -205,26 +207,4 @@ serVis(json)
 
 ```
 The relevance param. defines the relationship between the word's topic probability and its lift. Lift is the ratio of the probability of the word in the topic to the probability of the word in the corpus. The more frequent is the word in the corpus, the lower will be its lift. Saliency also gives a idea of both how common the word is in a topic to overall how common it is.  Same vein as tf-idf
-
-### Assignment Lab 3:
-
-Due in 2 weeks: May 2 at 11:59PM
-
-For this assignment you'll the articles data you downloaded from Nexis Uni in Week 2.
-
-1.  Create a corpus from your articles.
-
-2.  Clean the data as appropriate. (Clean the data with stopwords)
-
-3.  Run three models (i.e. with 3 values of k) and select the overall best value for k (the number of topics) - include some justification for your selection: theory, FindTopicsNumber() optimization metrics, interpretability, LDAvis. Select the best single value of k. 
-
-- Optimization metrics (Understand the topics)
-- Create 3 values of key
-
-4. Plot the top terms in each topic and the distribution of topics across a sample of the documents (constrained by what looks good in the plot).
-
-5.  Take a stab at interpreting the resulting topics. What are the key themes discussed in the articles in your data base?
-
-Use the words, use what you know about the articles, and do an interpretation of what they mean. 
-
 
